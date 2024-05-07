@@ -157,13 +157,11 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
-    register<bit<32>> (max_port_num) NAT_IP_table; //record the mapping private hostIP and public port 
-    register<bit<16>> (max_port_num) NAT_Port_table; //record the mapping private hostPort and public port
-    register<bit<32>> (max_port_num) NAT_FIN_counter;
-    // register<bit<32>> (max_port_num) host_ip;
-    // register<bit<16>>  (max_port_num) host_port;
-
-
+    register<bit<1>> (max_port_num) port_valid;
+    register<bit<32>> (max_port_num) out_in_IP;
+    register<bit<16>> (max_port_num) out_in_port;
+    register<bit<16>> (max_port_num) ip_port_to_out;
+    register<bit<32>> (max_port_num) FIN_counter;
     action drop() {
         // drop the packet
         mark_to_drop(standard_metadata);
@@ -193,79 +191,74 @@ control MyIngress(inout headers hdr,
             bit<9> src_port=standard_metadata.ingress_port;
             bit<32> index;
             bit<32> base=0;
+            bit<1> valid;
+            bit<1> valid_2;
+            bit<1> valid_3;
             bit<32> src_ip=hdr.ipv4.srcAddr;
             bit<32> dst_ip=hdr.ipv4.dstAddr;
             bit<16> src_tcp_port=hdr.tcp.srcPort;
             bit<16> dst_tcp_port=hdr.tcp.dstPort;
+            bit<32> map_IP;
+            bit<16> map_in_port;
             if(src_port!=3){
-                // hash(index, HashAlgorithm.crc32, base, src_tcp_port, max_port_num - 1);
-                bit<32> user;
-                NAT_IP_table.read(user,(bit<32>)src_tcp_port);
-                if(user==0){
-                    NAT_IP_table.write((bit<32>)src_tcp_port,hdr.ipv4.srcAddr);
-                    NAT_Port_table.write((bit<32>)src_tcp_port,src_tcp_port);
-                    hdr.ipv4.srcAddr=PUB_IP;
-                }
-                else if(user==hdr.ipv4.srcAddr){
-                    bit<32> num;
-                    NAT_FIN_counter.read(num,(bit<32>)src_tcp_port);
-                    if(num==2){
-                        NAT_IP_table.write((bit<32>)src_tcp_port,0);
-                        NAT_Port_table.write((bit<32>)src_tcp_port,0);
-                        NAT_FIN_counter.write((bit<32>)src_tcp_port,0);
+                hash(index,HashAlgorithm.crc32,base,{src_ip,src_tcp_port},max_port_num-1);
+                bit<16> map_out_port;
+                ip_port_to_out.read(map_out_port,index);
+                if(map_out_port==0){//new {ip,port} pair
+                    port_valid.read(valid,(bit<32>)src_tcp_port);
+                    port_valid.read(valid_2,(bit<32>)src_tcp_port+1);
+                    port_valid.read(valid_3,(bit<32>)src_tcp_port+1);
+                    if(valid==0){
+                        port_valid.write((bit<32>)src_tcp_port,1);
+                        out_in_IP.write((bit<32>)src_tcp_port,src_ip);
+                        out_in_port.write((bit<32>)src_tcp_port,src_tcp_port);
+                        ip_port_to_out.write(index,src_tcp_port);
+                        hdr.ipv4.srcAddr=PUB_IP;
                     }
-                    if(hdr.tcp.ctl_flag==0x011){
-                        NAT_FIN_counter.write((bit<32>)src_tcp_port,num+1);
-                    }
-                    hdr.ipv4.srcAddr=PUB_IP;
-                }
-                else{
-                    bit<32> u1;
-                    bit<32> u2;
-                    bit<32> u3;
-                    bit<32> u4;
-                    NAT_IP_table.read(u1,(bit<32>)src_tcp_port+1);
-                    NAT_IP_table.read(u2,(bit<32>)src_tcp_port+2);
-                    NAT_IP_table.read(u3,(bit<32>)src_tcp_port-1);
-                    NAT_IP_table.read(u4,(bit<32>)src_tcp_port-2);
-                    if(u1==0){
-                        NAT_IP_table.write((bit<32>)src_tcp_port+1,hdr.ipv4.srcAddr);
-                        NAT_Port_table.write((bit<32>)src_tcp_port+1,src_tcp_port);
+                    else if(valid_2==0){
+                        port_valid.write((bit<32>)(src_tcp_port+1),1);
+                        out_in_IP.write((bit<32>)(src_tcp_port+1),src_ip);
+                        out_in_port.write((bit<32>)(src_tcp_port+1),src_tcp_port);
+                        ip_port_to_out.write(index,(src_tcp_port+1));
                         hdr.ipv4.srcAddr=PUB_IP;
                         hdr.tcp.srcPort=src_tcp_port+1;
                     }
-                    else if(u2==0){
-                        NAT_IP_table.write((bit<32>)src_tcp_port+2,hdr.ipv4.srcAddr);
-                        NAT_Port_table.write((bit<32>)src_tcp_port+2,src_tcp_port);
+                    else if(valid_3==0){
+                        port_valid.write((bit<32>)(src_tcp_port+2),1);
+                        out_in_IP.write((bit<32>)(src_tcp_port+2),src_ip);
+                        out_in_port.write((bit<32>)(src_tcp_port+2),src_tcp_port);
+                        ip_port_to_out.write(index,src_tcp_port+2);
                         hdr.ipv4.srcAddr=PUB_IP;
                         hdr.tcp.srcPort=src_tcp_port+2;
                     }
-                    else if(u3==0){
-                        NAT_IP_table.write((bit<32>)src_tcp_port+3,hdr.ipv4.srcAddr);
-                        NAT_Port_table.write((bit<32>)src_tcp_port+3,src_tcp_port);
-                        hdr.ipv4.srcAddr=PUB_IP;
-                        hdr.tcp.srcPort=src_tcp_port-1;
-                    }
-                    else if(u4==0){
-                        NAT_IP_table.write((bit<32>)src_tcp_port+4,hdr.ipv4.srcAddr);
-                        NAT_Port_table.write((bit<32>)src_tcp_port+4,src_tcp_port);
-                        hdr.ipv4.srcAddr=PUB_IP;
-                        hdr.tcp.srcPort=src_tcp_port-2;
-                    }
-                    else{
-                        drop();
-                    }
+
                 }
+                else{
+                    bit<32> num;
+                    FIN_counter.read(num,(bit<32>)map_out_port);
+                    if(num==2){
+                        FIN_counter.write((bit<32>)map_out_port,0);
+                        ip_port_to_out.write(index,0);
+                        out_in_IP.write((bit<32>)map_out_port,0);
+                        out_in_port.write((bit<32>)map_out_port,0);
+                        port_valid.write((bit<32>)map_out_port,0);
+                    }
+                    if(hdr.tcp.ctl_flag==0x11){
+                        FIN_counter.write((bit<32>)map_out_port,num+1);
+                    }
+                    hdr.tcp.srcPort=map_out_port;
+                    hdr.ipv4.srcAddr=PUB_IP;
+                }
+
             }
             if(src_port==3){
-                // hash(index, HashAlgorithm.crc32, base, {src_ip,src_tcp_port}, max_port_num-1);
-                NAT_IP_table.read(hdr.ipv4.dstAddr,(bit<32>)dst_tcp_port);
-                NAT_Port_table.read(hdr.tcp.dstPort,(bit<32>)dst_tcp_port);
-                bit<32> num;
-                if(hdr.tcp.ctl_flag==0x011){
-                    NAT_FIN_counter.read(num,(bit<32>)dst_tcp_port);
-                    NAT_FIN_counter.write((bit<32>)dst_tcp_port,num+1);
+                if(hdr.tcp.ctl_flag==0x11){
+                    bit<32> num;
+                    FIN_counter.read(num,(bit<32>)dst_tcp_port);
+                    FIN_counter.write((bit<32>)dst_tcp_port,num+1);
                 }
+                out_in_IP.read(hdr.ipv4.dstAddr,(bit<32>)dst_tcp_port);
+                out_in_port.read(hdr.tcp.dstPort,(bit<32>)dst_tcp_port);
             }
             ipv4_lookup.apply();
         }
