@@ -4,6 +4,7 @@
 
 const bit<16> TYPE_IPV4 = 0x0800;
 const bit<16> TYPE_ARP = 0x0806;
+const bit<8>  TYPE_UDP = 0x11;
 const bit<8>  TYPE_TCP = 0x06;
 const bit<32> PUB_IP=0x8c710001;
 const bit<32> max_port_num=65535;
@@ -38,6 +39,13 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
+header udp_t{
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<16> length;
+    bit<16> checksum;
+
+}
 header tcp_t{
     bit<16> srcPort;
     bit<16> dstPort;
@@ -55,17 +63,23 @@ header Tcp_option_padding_h {
     varbit<160> padding;
 }
 
-
+header_union l4_t{
+    udp_t udp;
+    tcp_t tcp;
+    // Tcp_option_padding_h tcp_options_padding;
+}
 struct metadata {
     bit<16> tcp_length;
     bit<16> tot_length;
+    bit<16> udp_length;
 }
 
 struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
-    tcp_t        tcp;
-    Tcp_option_padding_h tcp_options_padding;
+    // tcp_t        tcp;
+    // Tcp_option_padding_h tcp_options_padding;
+    l4_t         l4;
 }
 error {
     TcpDataOffsetTooSmall,
@@ -93,14 +107,6 @@ parser Tcp_option_parser(packet_in b,
     }
 
     state consume_remaining_tcp_hdr_and_accept {
-        // A more picky sub-parser implementation would verify that
-        // all of the remaining bytes are 0, as specified in RFC 793,
-        // setting an error and rejecting if not.  This one skips past
-        // the rest of the TCP header without checking this.
-
-        // tcp_hdr_bytes_left might be as large as 40, so multiplying
-        // it by 8 it may be up to 320, which requires 9 bits to avoid
-        // losing any information.
         b.extract(padding, (bit<32>) (8 * (bit<9>) tcp_hdr_bytes_left));
         transition accept;
     }
@@ -125,17 +131,22 @@ parser MyParser(packet_in packet,
      state parse_ipv4{
         packet.extract(hdr.ipv4);
         transition select(hdr.ipv4.protocol) {
-            //TYPE_UDP  : parse_udp;
+            TYPE_UDP  : parse_udp;
             TYPE_TCP  : parse_tcp;
             default   : accept;
         }
     }
+    state parse_udp{
+        packet.extract(hdr.l4.udp);
+        meta.udp_length = hdr.ipv4.totalLen-20;
+        transition accept;
+    }
     state parse_tcp{
-        packet.extract(hdr.tcp);
-        meta.tcp_length = (bit<16>)hdr.tcp.data_offset * 4;
+        packet.extract(hdr.l4.tcp);
+        meta.tcp_length = (bit<16>)hdr.l4.tcp.data_offset * 4;
         meta.tot_length = hdr.ipv4.totalLen-20;
-        Tcp_option_parser.apply(packet, hdr.tcp.data_offset,
-                                hdr.tcp_options_padding);
+        // Tcp_option_parser.apply(packet, hdr.l4.tcp.data_offset,
+        //                         hdr.l4.tcp_options_padding);
         transition accept;
     }
 
@@ -187,7 +198,8 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        if(hdr.tcp.isValid()){
+        
+        if(hdr.l4.tcp.isValid() || hdr.l4.udp.isValid()){
             bit<9> src_port=standard_metadata.ingress_port;
             bit<32> index;
             bit<32> base=0;
@@ -196,42 +208,57 @@ control MyIngress(inout headers hdr,
             bit<1> valid_3;
             bit<32> src_ip=hdr.ipv4.srcAddr;
             bit<32> dst_ip=hdr.ipv4.dstAddr;
-            bit<16> src_tcp_port=hdr.tcp.srcPort;
-            bit<16> dst_tcp_port=hdr.tcp.dstPort;
+            bit<16> src_tcp_port;
+            bit<16> dst_tcp_port;
             bit<32> map_IP;
             bit<16> map_in_port;
-            if(src_port!=3){
+            if(hdr.l4.tcp.isValid()){
+                src_tcp_port=hdr.l4.tcp.srcPort;
+                dst_tcp_port=hdr.l4.tcp.dstPort;
+            }
+            else{
+                src_tcp_port=hdr.l4.udp.srcPort;
+                dst_tcp_port=hdr.l4.udp.dstPort;
+            }
+            if((src_port<3) && src_tcp_port==80){
+                hdr.ipv4.srcAddr=PUB_IP;
+            }
+            else if(src_port>2 && dst_tcp_port==80){
+                hdr.ipv4.dstAddr=h1_IP;
+                hdr.l4.tcp.dstPort=80;
+            }
+            else if(src_port<3){
                 hash(index,HashAlgorithm.crc32,base,{src_ip,src_tcp_port},max_port_num-1);
                 bit<16> map_out_port;
                 ip_port_to_out.read(map_out_port,index);
                 if(map_out_port==0){//new {ip,port} pair
                     port_valid.read(valid,(bit<32>)src_tcp_port);
                     port_valid.read(valid_2,(bit<32>)src_tcp_port+1);
-                    port_valid.read(valid_3,(bit<32>)src_tcp_port+1);
+                    port_valid.read(valid_3,(bit<32>)src_tcp_port+2);
                     if(valid==0){
-                        port_valid.write((bit<32>)src_tcp_port,1);
-                        out_in_IP.write((bit<32>)src_tcp_port,src_ip);
-                        out_in_port.write((bit<32>)src_tcp_port,src_tcp_port);
-                        ip_port_to_out.write(index,src_tcp_port);
+                        map_out_port=src_tcp_port;
+                        port_valid.write((bit<32>)map_out_port,1);
+                        out_in_IP.write((bit<32>)map_out_port,src_ip);
+                        out_in_port.write((bit<32>)map_out_port,src_tcp_port);
+                        ip_port_to_out.write(index,map_out_port);
                         hdr.ipv4.srcAddr=PUB_IP;
                     }
                     else if(valid_2==0){
-                        port_valid.write((bit<32>)(src_tcp_port+1),1);
-                        out_in_IP.write((bit<32>)(src_tcp_port+1),src_ip);
-                        out_in_port.write((bit<32>)(src_tcp_port+1),src_tcp_port);
-                        ip_port_to_out.write(index,(src_tcp_port+1));
+                        map_out_port=src_tcp_port+1;
+                        port_valid.write((bit<32>)(map_out_port),1);
+                        out_in_IP.write((bit<32>)(map_out_port),src_ip);
+                        out_in_port.write((bit<32>)(map_out_port),src_tcp_port);
+                        ip_port_to_out.write(index,(map_out_port));
                         hdr.ipv4.srcAddr=PUB_IP;
-                        hdr.tcp.srcPort=src_tcp_port+1;
                     }
                     else if(valid_3==0){
-                        port_valid.write((bit<32>)(src_tcp_port+2),1);
-                        out_in_IP.write((bit<32>)(src_tcp_port+2),src_ip);
-                        out_in_port.write((bit<32>)(src_tcp_port+2),src_tcp_port);
-                        ip_port_to_out.write(index,src_tcp_port+2);
+                        map_out_port=src_tcp_port+2;
+                        port_valid.write((bit<32>)(map_out_port),1);
+                        out_in_IP.write((bit<32>)(map_out_port),src_ip);
+                        out_in_port.write((bit<32>)(map_out_port),src_tcp_port);
+                        ip_port_to_out.write(index,map_out_port);
                         hdr.ipv4.srcAddr=PUB_IP;
-                        hdr.tcp.srcPort=src_tcp_port+2;
                     }
-
                 }
                 else{
                     bit<32> num;
@@ -243,22 +270,33 @@ control MyIngress(inout headers hdr,
                         out_in_port.write((bit<32>)map_out_port,0);
                         port_valid.write((bit<32>)map_out_port,0);
                     }
-                    if(hdr.tcp.ctl_flag==0x11){
+                    if(hdr.l4.tcp.isValid() && hdr.l4.tcp.ctl_flag==0x11){
                         FIN_counter.write((bit<32>)map_out_port,num+1);
                     }
-                    hdr.tcp.srcPort=map_out_port;
+                    // hdr.l4.tcp\.srcPort=map_out_port;
                     hdr.ipv4.srcAddr=PUB_IP;
                 }
-
+                if(hdr.l4.tcp.isValid()){
+                    hdr.l4.tcp.srcPort=map_out_port;
+                }
+                else{
+                    hdr.l4.udp.srcPort=map_out_port;
+                }
             }
-            if(src_port==3){
-                if(hdr.tcp.ctl_flag==0x11){
+            else if(src_port>2){
+                if(hdr.l4.tcp.isValid() && hdr.l4.tcp.ctl_flag==0x11){
                     bit<32> num;
                     FIN_counter.read(num,(bit<32>)dst_tcp_port);
                     FIN_counter.write((bit<32>)dst_tcp_port,num+1);
                 }
                 out_in_IP.read(hdr.ipv4.dstAddr,(bit<32>)dst_tcp_port);
-                out_in_port.read(hdr.tcp.dstPort,(bit<32>)dst_tcp_port);
+                out_in_port.read(map_in_port,(bit<32>)dst_tcp_port);
+                if(hdr.l4.tcp.isValid()){
+                    hdr.l4.tcp.dstPort=map_in_port;
+                }
+                else{
+                    hdr.l4.udp.dstPort=map_in_port;
+                }
             }
             ipv4_lookup.apply();
         }
@@ -306,7 +344,7 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
             hdr.ipv4.hdrChecksum,
             HashAlgorithm.csum16);
         update_checksum_with_payload(
-        hdr.tcp.isValid(),
+        hdr.l4.tcp.isValid(),
             {
             //tcp checksum is usually calculated with the following fields
             //pseudo header+tcp header+tcp payload
@@ -315,17 +353,30 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
             8w0,               //zero padding with protocol
             hdr.ipv4.protocol,
             meta.tot_length,   // 16 bit of tcp length + payload length in bytes
-            hdr.tcp.srcPort,
-            hdr.tcp.dstPort,
-            hdr.tcp.seq_num,
-            hdr.tcp.ack_num,
-            hdr.tcp.data_offset,
-            hdr.tcp.reserved,
-            hdr.tcp.ctl_flag,
-            hdr.tcp.window_size,
-            hdr.tcp.urgent_num,
-            hdr.tcp_options_padding.padding
-        }, hdr.tcp.checksum, HashAlgorithm.csum16);
+            hdr.l4.tcp.srcPort,
+            hdr.l4.tcp.dstPort,
+            hdr.l4.tcp.seq_num,
+            hdr.l4.tcp.ack_num,
+            hdr.l4.tcp.data_offset,
+            hdr.l4.tcp.reserved,
+            hdr.l4.tcp.ctl_flag,
+            hdr.l4.tcp.window_size,
+            hdr.l4.tcp.urgent_num
+        }, hdr.l4.tcp.checksum, HashAlgorithm.csum16);
+        update_checksum_with_payload(
+        hdr.l4.udp.isValid(),
+            {
+            //tcp checksum is usually calculated with the following fields
+            //pseudo header+tcp header+tcp payload
+            hdr.ipv4.srcAddr,
+            hdr.ipv4.dstAddr,
+            8w0,               //zero padding with protocol
+            hdr.ipv4.protocol,
+            hdr.l4.udp.length,   // 16 bit of tcp length + payload length in bytes
+            hdr.l4.udp.srcPort,
+            hdr.l4.udp.dstPort,
+            hdr.l4.udp.length
+        }, hdr.l4.udp.checksum, HashAlgorithm.csum16);
     }
 }
 
@@ -337,8 +388,9 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
-        packet.emit(hdr.tcp);
-        packet.emit(hdr.tcp_options_padding);
+        packet.emit(hdr.l4.udp);
+        packet.emit(hdr.l4.tcp);
+        // packet.emit(hdr.l4.tcp_options_padding);
     }
 }
 

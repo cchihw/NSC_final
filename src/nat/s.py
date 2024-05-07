@@ -1,4 +1,5 @@
 import socket
+import sys
 import threading
 
 exit_event = threading.Event()
@@ -6,7 +7,7 @@ exit_event = threading.Event()
 def receive_messages(client_socket):
     while not exit_event.is_set():
         try:
-            data = client_socket.recv(1024)
+            data= client_socket.recv(1024)
             if not data:
                 break
             print(data.decode('utf-8'))
@@ -15,6 +16,9 @@ def receive_messages(client_socket):
             break
 
 def main():
+    if len(sys.argv) != 2:
+        print("Usage: python udp.py 'n' or 'b'")
+        sys.exit(1)
     while True:
         ip = input("Enter IP address (or 'exit' to quit): ")
         if ip.lower() == 'ex':
@@ -23,7 +27,9 @@ def main():
 
         try:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket.bind(('0.0.0.0', 8888))
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if sys.argv[1] == 'b':
+                client_socket.bind(('0.0.0.0', 8888))
             client_socket.connect((ip, int(port)))
             
             print(f"Connected to {ip}:{port}")

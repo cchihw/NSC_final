@@ -1,20 +1,15 @@
 import socket
+from time import sleep
 import threading
 
 exit_event = threading.Event()
 
-def receive_messages(client_socket, client_address):
+def server(client_socket, client_address):
     while not exit_event.is_set():
         try:
-            data = client_socket.recv(1024)
-            if data:
-                message = data.decode('utf-8')
-                print(f"Received message from {client_address}: {message}")
-                if message.strip().lower() == 'exit':
-                    print(f"Received 'exit' command from {client_address}, closing connection...")
-                    break
-            else:
-                break
+            message="Hello from server"
+            client_socket.send(message.encode('utf-8'))
+            sleep(2)
         except Exception as e:
             print(f"Error receiving message: {e}")
             break
@@ -26,7 +21,7 @@ def main():
     # Create a TCP/IP socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Set REUSEADDR option
-    s.bind(('140.113.122.228', 12345))
+    s.bind(('10.0.1.1', 80))
     s.listen(5)
     print("Waiting for a connection...")
 
@@ -35,7 +30,7 @@ def main():
         while True:
             client_socket, client_address = s.accept()
             print(f"Connection from {client_address}")
-            t = threading.Thread(target=receive_messages, args=(client_socket, client_address))
+            t = threading.Thread(target=server, args=(client_socket, client_address))
             t.start()
             threads.append(t)
 
