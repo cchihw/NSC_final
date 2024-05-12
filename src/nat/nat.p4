@@ -163,13 +163,10 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
-    // register<bit<1>> (max_port_num) port_valid;
-    // register<bit<1>> (max_port_num) init;
     register<bit<16>> (max_port_num) port_counter;
     register<bit<32>> (max_port_num) out_in_IP;
     register<bit<16>> (max_port_num) out_in_port;
     register<bit<16>> (max_port_num) ip_port_to_out;
-    // register<bit<32>> (max_port_num) FIN_counter;
     action drop() {
         // drop the packet
         mark_to_drop(standard_metadata);
@@ -200,9 +197,6 @@ control MyIngress(inout headers hdr,
             bit<9> src_port=standard_metadata.ingress_port;
             bit<32> index;
             bit<32> base=0;
-            bit<1> valid;
-            bit<1> valid_2;
-            bit<1> valid_3;
             bit<32> src_ip=hdr.ipv4.srcAddr;
             bit<32> dst_ip=hdr.ipv4.dstAddr;
             bit<16> src_tcp_port;
@@ -235,7 +229,6 @@ control MyIngress(inout headers hdr,
                         next_port=10000;
                         port_counter.write(0,next_port+1);
                         map_out_port=next_port;
-                        port_valid.write((bit<32>)map_out_port,1);
                         out_in_IP.write((bit<32>)map_out_port,src_ip);
                         out_in_port.write((bit<32>)map_out_port,src_tcp_port);
                         ip_port_to_out.write(index,map_out_port);
@@ -245,55 +238,14 @@ control MyIngress(inout headers hdr,
                     else{
                         map_out_port=next_port;
                         port_counter.write(0,next_port+1);
-                        port_valid.write((bit<32>)map_out_port,1);
                         out_in_IP.write((bit<32>)map_out_port,src_ip);
                         out_in_port.write((bit<32>)map_out_port,src_tcp_port);
                         ip_port_to_out.write(index,map_out_port);
                         hdr.ipv4.srcAddr=PUB_IP;
                         hdr.l4.tcp.srcPort=map_out_port;
                     }
-                    // port_valid.read(valid,(bit<32>)src_tcp_port);
-                    // port_valid.read(valid_2,(bit<32>)src_tcp_port+1);
-                    // port_valid.read(valid_3,(bit<32>)src_tcp_port+2);
-                    // if(valid==0){
-                    //     map_out_port=src_tcp_port;
-                    //     port_valid.write((bit<32>)map_out_port,1);
-                    //     out_in_IP.write((bit<32>)map_out_port,src_ip);
-                    //     out_in_port.write((bit<32>)map_out_port,src_tcp_port);
-                    //     ip_port_to_out.write(index,map_out_port);
-                    //     hdr.ipv4.srcAddr=PUB_IP;
-                    // }
-                    // else if(valid_2==0){
-                    //     map_out_port=src_tcp_port+1;
-                    //     port_valid.write((bit<32>)(map_out_port),1);
-                    //     out_in_IP.write((bit<32>)(map_out_port),src_ip);
-                    //     out_in_port.write((bit<32>)(map_out_port),src_tcp_port);
-                    //     ip_port_to_out.write(index,(map_out_port));
-                    //     hdr.ipv4.srcAddr=PUB_IP;
-                    // }
-                    // else if(valid_3==0){
-                    //     map_out_port=src_tcp_port+2;
-                    //     port_valid.write((bit<32>)(map_out_port),1);
-                    //     out_in_IP.write((bit<32>)(map_out_port),src_ip);
-                    //     out_in_port.write((bit<32>)(map_out_port),src_tcp_port);
-                    //     ip_port_to_out.write(index,map_out_port);
-                    //     hdr.ipv4.srcAddr=PUB_IP;
-                    // }
                 }
                 else{
-                    // bit<32> num;
-                    // FIN_counter.read(num,(bit<32>)map_out_port);
-                    // if(num==2){
-                    //     FIN_counter.write((bit<32>)map_out_port,0);
-                    //     ip_port_to_out.write(index,0);
-                    //     out_in_IP.write((bit<32>)map_out_port,0);
-                    //     out_in_port.write((bit<32>)map_out_port,0);
-                    //     port_valid.write((bit<32>)map_out_port,0);
-                    // }
-                    // if(hdr.l4.tcp.isValid() && hdr.l4.tcp.ctl_flag==0x11){
-                    //     FIN_counter.write((bit<32>)map_out_port,num+1);
-                    // }
-                    // hdr.l4.tcp\.srcPort=map_out_port;
                     hdr.ipv4.srcAddr=PUB_IP;
                 }
                 if(hdr.l4.tcp.isValid()){
@@ -304,11 +256,6 @@ control MyIngress(inout headers hdr,
                 }
             }
             else if(src_port>2){
-                // if(hdr.l4.tcp.isValid() && hdr.l4.tcp.ctl_flag==0x11){
-                //     bit<32> num;
-                //     FIN_counter.read(num,(bit<32>)dst_tcp_port);
-                //     FIN_counter.write((bit<32>)dst_tcp_port,num+1);
-                // }
                 out_in_IP.read(hdr.ipv4.dstAddr,(bit<32>)dst_tcp_port);
                 out_in_port.read(map_in_port,(bit<32>)dst_tcp_port);
                 if(hdr.l4.tcp.isValid()){
@@ -338,7 +285,6 @@ control MyEgress(inout headers hdr,
     }
     apply {  
         if (standard_metadata.egress_port == standard_metadata.ingress_port) drop();
-
     }
 }
 
