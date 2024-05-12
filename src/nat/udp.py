@@ -24,9 +24,11 @@ def main():
         host= "10.0.1.2"
         port= 8080
     elif host_number==3:
-        host="140.113.122.228"
+        host="140.113.100.100"
         port= 8080
-        
+    elif host_number==4:
+        host="140.113.200.200"
+        port=8080
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -39,7 +41,7 @@ def main():
         while True:
             dest_ip= input("Enter destination IP address: ")
             dest_port = input("Enter destination port: ")
-            send_messages(sender,dest_ip, int(dest_port))
+            send_messages(sock,dest_ip, int(dest_port))
 
     except Exception as e:
         print("An error occurred:", e)

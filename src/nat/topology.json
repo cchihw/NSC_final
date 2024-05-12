@@ -8,13 +8,13 @@
             "commands":["route add default gw 10.0.1.10 dev eth0",
             "arp -i eth0 -s 10.0.1.10 08:00:00:00:01:00"]},
 
-        "h3": {"ip": "140.113.122.228/24", "mac": "08:00:00:00:02:03",
-            "commands":["route add default gw 140.113.122.50 dev eth0",
-            "arp -i eth0 -s 140.113.122.50 08:00:00:00:02:00"]},
+        "h3": {"ip": "140.113.100.100/24", "mac": "08:00:00:00:02:03",
+            "commands":["route add default gw 140.113.100.50 dev eth0",
+            "arp -i eth0 -s 140.113.100.50 08:00:00:00:02:00"]},
 
-        "h4": {"ip": "140.113.120.100/24", "mac": "08:00:00:00:03:04",
-            "commands":["route add default gw 140.113.120.50 dev eth0",
-            "arp -i eth0 -s 140.113.120.50 08:00:00:00:03:00"]}
+        "h4": {"ip": "140.113.200.200/24", "mac": "08:00:00:00:03:04",
+            "commands":["route add default gw 140.113.200.50 dev eth0",
+            "arp -i eth0 -s 140.113.200.50 08:00:00:00:03:00"]}
     },
     "switches": {
         "s1": { "runtime_json" : "s1-runtime.json" }

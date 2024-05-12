@@ -26,7 +26,7 @@ def main():
     # Create a TCP/IP socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Set REUSEADDR option
-    s.bind(('140.113.122.228', 12345))
+    s.bind(('140.113.100.100', 12345))
     s.listen(5)
     print("Waiting for a connection...")
 

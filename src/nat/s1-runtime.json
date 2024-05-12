@@ -28,7 +28,7 @@
     {
       "table": "MyIngress.ipv4_lookup",
       "match": {
-        "hdr.ipv4.dstAddr": ["140.113.122.228", 32]
+        "hdr.ipv4.dstAddr": ["140.113.100.100", 32]
       },
       "action_name": "MyIngress.ipv4_forward",
       "action_params": {
@@ -39,7 +39,7 @@
     {
       "table": "MyIngress.ipv4_lookup",
       "match": {
-        "hdr.ipv4.dstAddr": ["140.113.120.100", 32]
+        "hdr.ipv4.dstAddr": ["140.113.200.200", 32]
       },
       "action_name": "MyIngress.ipv4_forward",
       "action_params": {
