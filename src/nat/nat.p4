@@ -192,8 +192,13 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        
-        if(hdr.l4.tcp.isValid() || hdr.l4.udp.isValid()){
+        if(hdr.ipv4.srcAddr==h1_IP && hdr.ipv4.dstAddr==h2_IP){
+            ipv4_lookup.apply();
+        }
+        else if(hdr.ipv4.srcAddr==h2_IP && hdr.ipv4.dstAddr==h1_IP){
+            ipv4_lookup.apply();
+        }
+        else if(hdr.l4.tcp.isValid() || hdr.l4.udp.isValid()){
             bit<9> src_port=standard_metadata.ingress_port;
             bit<32> index;
             bit<32> base=0;

@@ -16,21 +16,16 @@ def receive_messages(client_socket):
             break
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python udp.py 'n' or 'b'")
-        sys.exit(1)
     while True:
-        # 
-        host=input()
-        if(host=="1" or host=="2"):
-            ip="140.113.100.100"
-            port=12345
-
+        # ip = input("Enter IP address (or 'exit' to quit): ")
+        # if ip.lower() == 'ex':
+        #     break
+        # port = input("Enter port number: ")
+        ip="140.113.0.1"
+        port=80
         try:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if sys.argv[1] == 'b':
-                client_socket.bind(('0.0.0.0', 8888))
             client_socket.connect((ip, int(port)))
             
             print(f"Connected to {ip}:{port}")
