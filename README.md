@@ -6,7 +6,7 @@ This project is a simple implementation of Layer 4 port based NAT (Network Addre
 - Mininet: 2.3.1b4
 - bmv2: Connot find the version.
 - p4c: 1.2.4.2
-## Install Guide:
+## Installaion Guide:
 Using the repo P4-guide to install the environment, the installation script I used is install-p4dev-v5.sh, but it must running in Ubuntu 20.04, you can find it in the bin folder. Using other version installation script or ubuntu may cause a longer installing time or dependency problem. After the installation, all the environment including mininet, bmv2, p4c, and other necessary tools will be installed in the system.
 ### Repo link:
 https://github.com/jafingerhut/p4-guide.git
@@ -47,12 +47,12 @@ The topology is a network with 4 hosts and 1 switch, I simply divide the network
 |  h2  | 00:00:00:00:01:02 |   10.0.1.2/24     |
 |  h3  | 00:00:00:00:03:03 | 140.113.100.100/24|
 |  h4  | 00:00:00:00:04:04 | 140.113.200.200/24|
-### Test Command and Program:
+## Command and Program test:
 Once you finish set up the environment, you can use the following command to test the network:
 ```
 mininet> pingall
 ```
-This command will help you to inspect the network connection, if the network is connected successfully, you can see the folling result:
+This command will help you to inspect the network connection of the NATIVE IP (not translated after NAT), if the network is connected successfully, you can see the following result:
 ```
 *** Ping: testing ping reachability
 h1 -> h2 h3 h4 
@@ -61,73 +61,126 @@ h3 -> h1 h2 h4
 h4 -> h1 h2 h3 
 *** Results: 0% dropped (12/12 received)
 ```
-If the result is same as above, you can use the following command to test the NAT function, The test program can be classified into three parts:
-1. TCP connection from two host in same internal network to the outer network host.
+If the result is same as above, you can use the following command to test the NAT function, The test program can be classified into these parts:
 
-    This test will simulate if two internal hosts are using the same program and trying to connect to a same outer network host, the NAT function will assign an outer port as the source port using in public network and record it accoding to the internal IP and port.<br>
-    Test content:
-    - s.py 'n' or 'b':TCP sender program, it will send a message to the receiver program, argument 'n' for not binding the port, 'b' for binding the source port to 8888.
-    - r.py: The TCP receiver program, it will listen to the port 12345 and print the received message.
+1. Forwarding between the internal network.
     
-    Test flow:<br>
-    After starting the mininet environment:
+    This part will test the forwarding function between the internal network, two hosts in the internal network will run an UDP program to send and receive messages.
+
+    Test conetent:
+    - udp.py 'host number's: This program will set up a sender thread and a receiver thread, both bind at port 8080, host number helps you automatically set the IP address of the host.
+
+    Test flow:
+    ```
+    mininet> xterm h1 h2
+    ```
+    At terminal h1:
+    ```
+    h1> python3 udp.py 1
+    Enter destination IP address: 10.0.1.2
+    Enter destination port: 8080
+    Enter message: Hello from  h1
+    ```
+    At terminal h2:
+    ```
+    h2> python3 udp.py 2
+    ```
+
+    After the test, you will see the message "Hello from h1" is received by h2, which means the forwarding function between the internal network is working.
+
+2. Forwarding between the external network.
+
+    This part will test the forwarding function between the outer network, two hosts in the outer network will run an UDP program to send and receive messages.
+
+    Test content:
+    - udp.py 'host number's: This program will set up a sender thread and a receiver thread, both bind at port 8080, host number helps you automatically set the IP address of the host.
+
+    Test flow:
+    ```
+    mininet> xterm h3 h4
+    ```
+    At terminal h3:
+    ```
+    h3> python3 udp.py 3
+    Enter destination IP address: 140.113.200.200
+    Enter destination port: 8080
+    Enter message: Hello from  h3
+    ```
+    At terminal h4:
+    ```
+    h4> python3 udp.py 4
+    ```
+
+    After the test, you will see the message "Hello from h3" is received by h4, which means the forwarding function between the outer network is working.
+3. Test the UDP connection from an internal network host to an outer network host.
+
+    This part is going to test the basic NAT function of the switch, the UDP packet from the internal network will be translated to the outer network with the public IP address.
+
+    Test content:
+    - udp.py 'host number's: This program will set up a sender thread and a receiver thread, both bind at port 8080, host number helps you automatically set the IP address of the host.
+
+    Test flow:
+    ```
+    mininet> xterm h2 h3
+    ```
+    At terminal h3:<br>
+    ```
+    h3> python3 udp.py 3
+    ```
+    At terminal h2:
+    ```
+    h2> python3 udp.py 2
+    Enter destination IP address: 140.113.100.100
+    Enter destination port: 8080
+    Enter message: Hello from  h2
+    ```
+
+    In this part, the result will be totally different from the previous two parts, in terminal h3, you will see the message "Hello from h2" is received, and the source IP address is `140.113.0.1`, source port is not `8080`, which means the NAT function is working correctly. 
+4. TCP connection from two host in same internal network to the outer network host.
+
+    This part is going to test if two internal network hosts are trying to connect to a same outer network host, the NAT function will translate the source IP address and port to the public IP address and port.
+
+    Test content:
+    - tcp_sender.py 'host number's: This program will start a sender thread on port `8888`, host number helps you automatically set the destination IP address and port of the target host.
+    - tcp_receiver.py: This program will listen to the port 12345 and receive the message from the sender.
+
+    Test flow:
     ```
     mininet> xterm h1 h2 h3
     ```
     At terminal h3:
     ```
-    h1> python3 r.py
-    ```
-    At terminal h1,h2:
-    ```
-    h1> python3 s.py n or b
-    s.py> 140.113.100.100
-    s.py> 12345
-    ```
-    After the program start, you can see the TCP connection is built successfully, and the corresponding srouce port after the NAT is shown in h3's terminal.
-    If you use the 'b' argument both at h1 and h2, you can see the both h1 and h2's source port is 8888 in wireshark, but at h3's terminal, the source port is different, which means the NAT function is working.
-2. Test the UDP connection from an internal network host to an outer network host.
-    Test content:
-    - udp.py 'host number': The UDP sender program, it will send a message to the receiver program, the argument is the corresponding starter host number, the program will automatically bind the sender and receiver thread to the IP:port at `{host_IP:8080}`
-    Test flow:<br>
-    ```    
-    mininet> xterm h1 h3
+    h3> python3 tcp_receiver.py
     ```
     At terminal h1:
     ```
-    h1> python3 udp.py 1
-    udp.py> 140.113.100.100
-    udp.py> 8080
-    udp.py> Hello from h1.
+    h1> python3 tcp_sender.py 1
     ```
-    At terminal h3:
+    At terminal h2:
     ```
-    h3> python3 udp.py 3
-    udp.py> 140.113.0.1
-    udp.py> {the corresponding port shown in h3's terminal}
-    udp.py> Hello from h3.
+    h2> python3 tcp_sender.py 2
     ```
-    The test flow is similar to the TCP test, h1 first start a udp connection at port 8080, the send a message to h3, after the NAT, the source port 8080 will be translated to another port, and the message will be received by h3.
+    After the command is executed, in terminal h3, you will see two host have connected to the server, both source IP address is 140.113.0.1 but with different source port, which means the NAT function is working correctly.
 
-    If h3 reply a message to h1 using the source port after NAT, the message will be received by h1, which means the NAT function can actually translate the outer port to the original internal port 8080 and internal IP h1.
-3. Test the Port forwarding function from the outer network host to the internal network host.
-    
+5. Test the running server in the internal network can be accessed by the outer network.
+
+    In the previous part, once we want to start a connection between the internal network and the outer network, we need to set up the connection from the internal network to the outer network first. But in P4 NAT, the connection can be forwarding from the outer network to the internal network directly, any connection want to access the server via specific port, can be forwarded to the specific host in the internal network.
+
     Test content:
     - server.py: The server program, it will listen to the port 80 to simulate the http web server.
-    - s.py: The client program, it will build a connection to the server program.
+    - client.py: The client program, it will build a connection to the server program.
 
-    Test flow:<br>
+    Test flow:
     ```
-    mininet> xterm h1 h3
+    mininet> xterm h1 h4
     ```
     At terminal h1:
     ```
     h1> python3 server.py
     ```
-    At terminal h3:
+    At terminal h4:
     ```
-    h3> python3 s.py
-    s.py> 140.113.0.1
-    s.py> 80
+    h4> python3 client.py
     ```
-    After the command is executed, you can see the host h3 will periodically receive a message from h1, which means the port forwarding function is working.
+
+    After the command is executed, you can see h4 will periodically receive a message `"Hello from server"` from h1, which means we can bind the specific port to the specific host in the internal network. And thus do not need to set up the connection from the internal network to the outer network first.
