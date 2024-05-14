@@ -192,10 +192,7 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        if(hdr.ipv4.srcAddr==h1_IP && hdr.ipv4.dstAddr==h2_IP){
-            ipv4_lookup.apply();
-        }
-        else if(hdr.ipv4.srcAddr==h2_IP && hdr.ipv4.dstAddr==h1_IP){
+        if((hdr.ipv4.dstAddr>>8)==0x0a0001){
             ipv4_lookup.apply();
         }
         else if(hdr.l4.tcp.isValid() || hdr.l4.udp.isValid()){
@@ -232,8 +229,8 @@ control MyIngress(inout headers hdr,
                     port_counter.read(next_port,0);
                     if(next_port==0){
                         next_port=10000;
-                        port_counter.write(0,next_port+1);
                         map_out_port=next_port;
+                        port_counter.write(0,next_port+1);
                         out_in_IP.write((bit<32>)map_out_port,src_ip);
                         out_in_port.write((bit<32>)map_out_port,src_tcp_port);
                         ip_port_to_out.write(index,map_out_port);
@@ -242,7 +239,12 @@ control MyIngress(inout headers hdr,
                     }
                     else{
                         map_out_port=next_port;
-                        port_counter.write(0,next_port+1);
+                        if(next_port<65500){
+                            port_counter.write(0,next_port+1);
+                        }
+                        else{
+                            port_counter.write(0,10000);
+                        }
                         out_in_IP.write((bit<32>)map_out_port,src_ip);
                         out_in_port.write((bit<32>)map_out_port,src_tcp_port);
                         ip_port_to_out.write(index,map_out_port);
@@ -261,13 +263,15 @@ control MyIngress(inout headers hdr,
                 }
             }
             else if(src_port>2){
-                out_in_IP.read(hdr.ipv4.dstAddr,(bit<32>)dst_tcp_port);
-                out_in_port.read(map_in_port,(bit<32>)dst_tcp_port);
-                if(hdr.l4.tcp.isValid()){
-                    hdr.l4.tcp.dstPort=map_in_port;
-                }
-                else{
-                    hdr.l4.udp.dstPort=map_in_port;
+                if(hdr.ipv4.dstAddr==PUB_IP){
+                    out_in_IP.read(hdr.ipv4.dstAddr,(bit<32>)dst_tcp_port);
+                    out_in_port.read(map_in_port,(bit<32>)dst_tcp_port);
+                    if(hdr.l4.tcp.isValid()){
+                        hdr.l4.tcp.dstPort=map_in_port;
+                    }
+                    else{
+                        hdr.l4.udp.dstPort=map_in_port;
+                    }
                 }
             }
             ipv4_lookup.apply();

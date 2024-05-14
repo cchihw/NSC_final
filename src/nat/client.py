@@ -34,7 +34,7 @@ def main():
             receive_thread.start()
 
             while True:
-                message = input("Enter message to send (or 'ex' to disconnect): ")
+                message = input()
                 if message.lower() == 'ex':
                     client_socket.shutdown(socket.SHUT_RDWR)
                     client_socket.close()  
