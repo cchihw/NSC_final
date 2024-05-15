@@ -59,14 +59,10 @@ header tcp_t{
     bit<16> urgent_num;
 }
 
-header Tcp_option_padding_h {
-    varbit<160> padding;
-}
 
 header_union l4_t{
     udp_t udp;
     tcp_t tcp;
-    // Tcp_option_padding_h tcp_options_padding;
 }
 struct metadata {
     bit<16> tcp_length;
@@ -77,8 +73,6 @@ struct metadata {
 struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
-    // tcp_t        tcp;
-    // Tcp_option_padding_h tcp_options_padding;
     l4_t         l4;
 }
 error {
@@ -190,7 +184,13 @@ control MyIngress(inout headers hdr,
         size = 1024;
         default_action = multicast;
     }
-
+    action register_modify(bit<32> index, bit<16> map_out_port, bit<32> src_ip, bit<16> src_tcp_port){
+        out_in_IP.write((bit<32>)map_out_port,src_ip);
+        out_in_port.write((bit<32>)map_out_port,src_tcp_port);
+        ip_port_to_out.write(index,map_out_port);
+        hdr.ipv4.srcAddr=PUB_IP;
+        hdr.l4.tcp.srcPort=map_out_port;
+    }
     apply {
         if((hdr.ipv4.dstAddr>>8)==0x0a0001){
             ipv4_lookup.apply();
@@ -203,7 +203,6 @@ control MyIngress(inout headers hdr,
             bit<32> dst_ip=hdr.ipv4.dstAddr;
             bit<16> src_tcp_port;
             bit<16> dst_tcp_port;
-            bit<32> map_IP;
             bit<16> map_in_port;
             if(hdr.l4.tcp.isValid()){
                 src_tcp_port=hdr.l4.tcp.srcPort;
@@ -231,11 +230,7 @@ control MyIngress(inout headers hdr,
                         next_port=10000;
                         map_out_port=next_port;
                         port_counter.write(0,next_port+1);
-                        out_in_IP.write((bit<32>)map_out_port,src_ip);
-                        out_in_port.write((bit<32>)map_out_port,src_tcp_port);
-                        ip_port_to_out.write(index,map_out_port);
-                        hdr.ipv4.srcAddr=PUB_IP;
-                        hdr.l4.tcp.srcPort=map_out_port;
+                        register_modify(index,map_out_port,src_ip,src_tcp_port);
                     }
                     else{
                         map_out_port=next_port;
@@ -245,11 +240,7 @@ control MyIngress(inout headers hdr,
                         else{
                             port_counter.write(0,10000);
                         }
-                        out_in_IP.write((bit<32>)map_out_port,src_ip);
-                        out_in_port.write((bit<32>)map_out_port,src_tcp_port);
-                        ip_port_to_out.write(index,map_out_port);
-                        hdr.ipv4.srcAddr=PUB_IP;
-                        hdr.l4.tcp.srcPort=map_out_port;
+                        register_modify(index,map_out_port,src_ip,src_tcp_port);
                     }
                 }
                 else{
