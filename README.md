@@ -6,7 +6,7 @@ This project is a simple implementation of Layer 4 port based NAT (Network Addre
 - Mininet: 2.3.1b4
 - bmv2: Connot find the version.
 - p4c: 1.2.4.2
-## Installaion Guide:
+## Installation Guide:
 Using the repo P4-guide to install the environment, the installation script I used is install-p4dev-v5.sh, but it must running in Ubuntu 20.04, you can find it in the bin folder. Using other version installation script or ubuntu may cause a longer installing time or dependency problem. After the installation, all the environment including mininet, bmv2, p4c, and other necessary tools will be installed in the system.
 ### Repo link:
 https://github.com/jafingerhut/p4-guide.git
