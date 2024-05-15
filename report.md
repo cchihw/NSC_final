@@ -305,4 +305,19 @@ In this part, three cases of checksum are needed to be checked and updated:
 In this lab, I learned the basic concept of NAT and how to implement NAT in P4 language. I also learned a lot in mininet building and socket programming, without the help of the mininet and socket programming, I cannot easily set up a network environment and even test the switch. Although the NAT implementation is simple, I think it is still a good practice to understand the basic concept in both NAT and P4 application. Hope I can have more opportunities to research P4 language in the future.
 
 ## Reference:
+P4 language specification:<br>
+https://p4.org/p4-spec/docs/P4-16-v1.0.0-spec.html
 
+P4 spec and tutorial:<br>
+https://github.com/p4lang/p4-spec
+
+NAT concept:<br>
+https://www.cnblogs.com/wbxjiayou/p/5150753.html
+
+https://en.wikipedia.org/wiki/Network_address_translation
+
+TCP checksum:<br>
+https://blog.csdn.net/gufuguang/article/details/121229086
+
+UDP checksum:<br>
+https://www.ptt.cc/bbs/NTUE-CS100/M.1262621627.A.945.html
