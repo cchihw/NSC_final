@@ -41,6 +41,8 @@ The topology is a network with 4 hosts and 1 switch, I simply divide the network
 - h4 with MAC address `08:00:00:04:04` and IP address `140.113.200.200/24`
 - Default gateway: `140.113.200.50` at eth0 to switch s1
 
+### Network Configuration:
+
 | Host |    MAC Address    |     IP Address    |
 |------|-------------------|-------------------|
 |  h1  | 00:00:00:00:01:01 |   10.0.1.1/24     |
@@ -48,10 +50,22 @@ The topology is a network with 4 hosts and 1 switch, I simply divide the network
 |  h3  | 00:00:00:00:03:03 | 140.113.100.100/24|
 |  h4  | 00:00:00:00:04:04 | 140.113.200.200/24|
 
+### Routing Table:
+
+Routing table is set in file `s1-runtime.json`, the table is shown below:
+
+| Destination IP   | Egress Port | MAC Address          |
+|------------------|-------------|----------------------|
+|10.0.1.1/32       |1            |08:00:00:00:01:01     |
+|10.0.1.2/32       |2            |08:00:00:00:01:02     |
+|140.113.100.100/32|3          |08:00:00:00:02:03     |
+|140.113.200.200/32|4          |08:00:00:00:03:04     |
+
+
 ## Experiment Result:
 
-I design 5 tests to test the if functionality of the NAT switch can fulfill the excepted result. The result is shown below, and the testing flow has been shown in the `README` file.
-1. Forwarding between the internal network.
+I designed five experiments to test whether the switch performing NAT can achieve the expected results. The results are shown below, and the testing procedures are detailed in the `README.md` file.
+1. **Forwarding between the internal network.**
 
     This part is aimed to test the connection between the internal network, the packet should be forwarded correctly between h1 and h2.
 
@@ -66,7 +80,7 @@ I design 5 tests to test the if functionality of the NAT switch can fulfill the 
 
     In the screenshot above, we can see that the packet is forwarded correctly from h1 to h2.
 
-2. Forwarding between the external network.
+2. **Forwarding between the external network.**
 
     This part is aimed to test the connection between the external network, the packet should be forwarded correctly between h3 and h4, both IP and port are not rewrite by the switch.
 
@@ -81,7 +95,7 @@ I design 5 tests to test the if functionality of the NAT switch can fulfill the 
 
     In the screenshot above, we can see that the packet is forwarded correctly from h3 to h4, both IP and port are not rewrite by the switch.
 
-3. Test the UDP connection from an internal network host to an outer network host.
+3. **Test the UDP connection from an internal network host to an outer network host.**
 
     This part is going to test the UDP connection from h2 to h3. Because the packet is sent from the internal network to the outer network, NAT should be applied, the source IP address and port number of the packet should be translated to the public IP address `140.113.0.1` and a unique port number assigned by the switch.
 
@@ -96,7 +110,7 @@ I design 5 tests to test the if functionality of the NAT switch can fulfill the 
 
     From the screenshot above, we can see that the IP and source port shown in h2 is `10.0.1.2` and `8080`,but when the packet is received by h3 is the public IP address `140.113.0.1` and the unique port number `10000` after the NAT translation. Thus the packet is forwarded correctly from h2 to h3.
 
-4. TCP connection from two host in same internal network to the outer network host.
+4. **TCP connection from two host in same internal network to the outer network host.**
 
     This part is going to test if two internal network hosts are trying to connect to a same outer network host, the NAT function will translate the source IP address and port to the public IP address and port.
     
@@ -118,7 +132,7 @@ I design 5 tests to test the if functionality of the NAT switch can fulfill the 
     From the screenshot above, we can see that TCP connection is working correctly between h1 and h3, and h2 and h3. From the wireshark in h1 and h2, we can see that the source IP address and port number are both their own IP address and port number in the internal network, but when the packet is received by h3, the source IP address is the public IP address `140.113.0.1` and the port number is unique. So the NAT function is working correctly.
 
 
-5. Test the running server in the internal network can be accessed by the outer network.
+5. **Test the running server in the internal network can be accessed by the outer network.**
 
     In the previous part, once we want to start a connection between the internal network and the outer network, we need to set up the connection from the internal network to the outer network first. But in P4 NAT, the connection can be forwarding from the outer network to the internal network directly, any connection want to access the server via specific port, can be forwarded to the specific host in the internal network.
 
@@ -254,6 +268,12 @@ For the IP forward part, I set up 3 actions:
 These three actions are used in the `ipv4_lookup` table, which use longest prefix match to forward the packet to the specific port.
 
 
+Besides the actions for ipv4 forwarding, I define one more action for modifying the register storing the NAT translation information.
+
+![](pic/ingress_1-1.png)
+
+This action is used to update the register `ip_port_to_out`, `out_in_IP`, and `out_in_port` after the NAT translation. The action will be used in the apply part.
+
 In the apply part, I first using bit operation to check if the IP address is in the internal network.
 
 If the packet's destination IP address is in the internal network, the packet will be forwarded directly to the specific port using the `ipv4_lookup` table.
@@ -271,7 +291,7 @@ Later, check if this packet is sent or received from the specific port, if so, t
 
 ![](pic/ingress_4.png)
 
-In the next, the case if the packet is ingress from the internal network and not sent from the specific port. The switch will first put source IP address and port number together into a hash value, then check if the hash value is in the register `ip_port_to_out`. If the corresponding port number is 0, which means this is a new {IP, port} pair, the switch will assign a unique port number to the packet, and store the mapping IP address and source port number to register `out_in_IP` and `out_in_port`, and store the mapping between the hash value and the unique port number to the register `ip_port_to_out`. Then the source IP address will be translated to the public IP address, and the source port number will be translated to the unique port number. If the corresponding port number is not 0, which means this {IP,port} pair has been assigned a unique port number, the switch will translate the source IP address to the public IP address, and use this unique port number as the source port number. By the way, if the port number is larger than 65500, the port number will be reset to 10000.
+In the next, the case if the packet is ingress from the internal network and not sent from the specific port. The switch will first put source IP address and port number together into a hash value, then check if the hash value is in the register `ip_port_to_out`. If the corresponding port number is `0`, which means this is a new `{IP, port}` pair, the switch will assign a unique port number to the packet, and store the mapping IP address and source port number to register `out_in_IP` and `out_in_port`, and store the mapping between the hash value and the unique port number to the register `ip_port_to_out`. Then the source IP address will be translated to the public IP address, and the source port number will be translated to the unique port number. If the corresponding port number is not `0`, which means this `{IP,port}` pair has been assigned a unique port number, the switch will translate the source IP address to the public IP address, and use this unique port number as the source port number. By the way, if the port number is larger than `65500`, the port number will be reset to `10000`. After the unique port number is assigned, the action 'register_modify' will be applied to update the register.
 
 ![](pic/ingress_5.png)
 
@@ -282,19 +302,19 @@ The last part is the packet is received from the outer network, the switch will 
 ### Checksum update
 Checksum update is used after the NAT translation, because the IP address and port number are changed, the checksum in the packet should be updated. 
 In this part, three cases of checksum are needed to be checked and updated:
-1. IPv4 checksum
+1. **IPv4 checksum**
 
     IPv4 checksum is calculated by the header of the IPv4, so just simply put the IPv4 header into the checksum update function.
 
     ![](pic/cs_1.png)
 
-2. UDP checksum
+2. **UDP checksum**
 
     UDP checksum is more complex than IPv4 checksum, because the UDP checksum is calculated by the pseudo header, UDP header, and the payload. The pseudo header is the source IP address, destination IP address, protocol type, and the length of the UDP packet. All of then should align in 16 bits, so first in the pseudo header part, 8-bit zero should be combined with the protocol type to align the 16 bits. Then using the function `update_checksum_with_payload` to update the checksum with the payload we do not parse.
 
     ![](pic/cs_2.png)
 
-3. TCP checksum
+3. **TCP checksum**
 
     TCP checksum is the most difficult part in checksum updating, like UDP checksum, TCP checksum is calculated by the pseudo header, TCP header, and the payload. The pseudo header is the same as the UDP checksum, just pay attention that the length here is the length of the total TCP header with payload. However, in checksum_update part, any variables cannot be calclated in this part, so I use the metadata calculated in the parser part to update the checksum in the ingress part. Once the metadata is make sure to be correct, the remaining part is the same as the UDP checksum update.
 
