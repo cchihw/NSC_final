@@ -83,23 +83,7 @@ error {
 /*************************************************************************
 *********************** P A R S E R  ***********************************
 *************************************************************************/
-parser Tcp_option_parser(packet_in b,
-                         in bit<4> tcp_hdr_data_offset,
-                         out Tcp_option_padding_h padding)
-{
-    bit<7> tcp_hdr_bytes_left;
-    
-    state start {
-        verify(tcp_hdr_data_offset >= 5, error.TcpDataOffsetTooSmall);
-        tcp_hdr_bytes_left = 4 * (bit<7>) (tcp_hdr_data_offset - 5);
-        transition consume_remaining_tcp_hdr_and_accept;
-    }
 
-    state consume_remaining_tcp_hdr_and_accept {
-        b.extract(padding, (bit<32>) (8 * (bit<9>) tcp_hdr_bytes_left));
-        transition accept;
-    }
-}
 parser MyParser(packet_in packet,
                 out headers hdr,
                 inout metadata meta,
@@ -134,8 +118,6 @@ parser MyParser(packet_in packet,
         packet.extract(hdr.l4.tcp);
         meta.tcp_length = (bit<16>)hdr.l4.tcp.data_offset * 4;
         meta.tot_length = hdr.ipv4.totalLen-20;
-        // Tcp_option_parser.apply(packet, hdr.l4.tcp.data_offset,
-        //                         hdr.l4.tcp_options_padding);
         transition accept;
     }
 
