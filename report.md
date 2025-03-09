@@ -2,7 +2,7 @@
 ## Repository link:
 All the code and environment setup can be found in the repository : https://github.com/Zhih25/NSC_final
 
-[NSC_final](https://github.com/Zhih25/NSC_final)
+[NSC_final](https://github.com/cchihw/NSC_final)
 
 ## Introduction:
 This project is a simple implementation of Layer 4 port based NAT (Network Address Translation) using P4 language with bmv2 switch. The environment will simulate a scheme with internal network and outer network, then any packet with L4 TCP/UDP header will be translated to the outer/internal network with a public IP address using the src/dst transport layer port.
